@@ -1,0 +1,137 @@
+---
+title: "HW4"
+author: "Drew Andersen"
+date: "5/18/2022"
+output: html_document
+---
+
+```{r setup, include = FALSE, message = FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+
+library(here)
+library(tidyverse)
+library(kableExtra)
+```
+
+#Introduction
+```{r}
+damages <- read_csv(here("damages.csv"))
+warming <- read_csv(here("warming.csv"))[,-1]
+
+#changing names
+damages <- damages %>% 
+  rename(dam = damages,
+         deg_c = warming) %>% 
+  mutate(deg_c_sq = deg_c^2)
+
+warming <- warming %>% 
+  rename(CO2_base = warming_baseline,
+         CO2_pulse = warming_pulse)
+```
+
+##Question 1
+```{r}
+#quad model with 0 intercept
+quad_model <- lm(dam ~ 0 + deg_c + deg_c_sq, data = damages)
+
+#function for quadratic fit 
+quad_fun <- function(deg_c, deg_c_sq){
+  dam <- quad_model$coefficients[1]*deg_c + quad_model$coefficients[2]*deg_c_sq
+  return(dam)
+}
+
+damages$dam_fit = quad_fun(damages$deg_c, damages$deg_c_sq)
+```
+
+```{r}
+ggplot(data = damages, aes(x = deg_c, y = dam)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ x + I(x^2)) +
+  xlab("Warming (˚C)") +
+  ylab("Annual Total Damages ($)") +
+  theme_minimal()
+```
+ 
+ **Figure 1:** The annual total damages from climate change warming in degree Celsius fitted with a quadratic function with a zero intercept. 
+ 
+##Question 2
+```{r}
+#using function to calculate env damage from baseline, pulse, difference, and pulse per ton of CO2
+warming$base_dam <- quad_fun(warming$CO2_base,(warming$CO2_base)^2)
+warming$pulse_dam <- quad_fun(warming$CO2_pulse,(warming$CO2_pulse)^2)
+warming$dam_diff <- warming$pulse_dam - warming$base_dam
+warming$pulse_dam_per_ton_CO2 <- warming$dam_diff/(35E9)
+```
+
+```{r}
+ggplot(data = warming, aes(x = year, y = base_dam)) +
+  geom_point() +
+  xlab("Year") +
+  ylab("Annual Total Damages ($)")
+```
+
+**Figure 2:** Damages over time without the pulse.
+
+```{r}
+ggplot(data = warming, aes(x = year, y = pulse_dam)) +
+  geom_point() +
+  xlab("Year") +
+  ylab("Annual Total Damages ($)") 
+```
+
+**Figure 3:** Damages over time with the pulse.
+
+```{r}
+ggplot(data = warming, aes(x = year, y = dam_diff)) +
+  geom_point() +
+  xlab("Year") +
+  ylab("Annual Total Damages ($)") 
+```
+
+**Figure 4:** The difference in damages over time that arises from the pulse.
+
+```{r}
+ggplot(data = warming, aes(x = year, y = pulse_dam_per_ton_CO2)) +
+  geom_point() +
+  xlab("Year") +
+  ylab("Annual Total Damages ($)") 
+```
+
+**Figure 5:** The difference in damages over time from the pulse per ton of CO2 (assuming that each ton of the pulse causes the same amount of damage).
+
+##Question 3 & 4
+```{r}
+one_ton_dam = sum(warming$pulse_dam_per_ton_CO2)
+
+discount_fun <- function(rate, time, fv){
+  npv <- fv/(1+(rate/100))^time
+  return(npv)
+}
+
+scc_df <- data_frame(rate = seq(0,10,0.2))
+scc_df$scc <- discount_fun(scc_df$rate, 78, one_ton_dam)
+
+#q4 stuff
+ramsey_rate = (.01 + (2*.01)) * 100 #multiplied by 100 to be compatible with function
+discount_ramsey = discount_fun(ramsey_rate, 78, one_ton_dam)
+
+ggplot(data = scc_df, aes(x = rate, y = scc)) +
+  geom_point() +
+  geom_point(aes(x = ramsey_rate, y = discount_ramsey), colour = "red")
+```
+
+**Figure 6:** The social cost of carbon (SCC) at various discount rates. A higher discount rate leads to a lower SCC. The red dot represent the SCC using the Ramsey Rule (rate = `r ramsey_rate`%).
+
+##Question 5
+```{r}
+rate_q5 = 2
+#Policy A (BAU)
+
+
+#Policy B (Strong Action)
+warming$policy_B <- discount_fun(rate_q5, (warming$year - 2022), warming$base_dam)
+adding = seq(warming$policy_B[1], warming$policy_B[28], 1)
+epv_to_2050 = mapply(sum, c(warming$policy_B[1]:warming$policy_B[28]))
+epv_post_2050 = warming$policy_B[30]*50 #50 year period
+```
+
