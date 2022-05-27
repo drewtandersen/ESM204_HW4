@@ -11,6 +11,7 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 library(here)
 library(tidyverse)
 library(kableExtra)
+library(ggthemes)
 ```
 
 #Introduction
@@ -94,7 +95,7 @@ ggplot(data = warming, aes(x = year, y = dam_diff)) +
 ggplot(data = warming, aes(x = year, y = pulse_dam_per_ton_CO2)) +
   geom_point() +
   xlab("Year") +
-  ylab("Annual Total Damages ($)") 
+  ylab("Annual Total Damages per ton of CO2 ($)") 
 ```
 
 **Figure 5:** The difference in damages over time from the pulse per ton of CO2 (assuming that each ton of the pulse causes the same amount of damage).
@@ -122,16 +123,73 @@ ggplot(data = scc_df, aes(x = rate, y = scc)) +
 
 **Figure 6:** The social cost of carbon (SCC) at various discount rates. A higher discount rate leads to a lower SCC. The red dot represent the SCC using the Ramsey Rule (rate = `r ramsey_rate`%).
 
+The SCC is equal to `r scc_df[scc_df$rate == 3.0,]` dollars USD when using the Ramsey Rule to set the discount rate.
+
 ##Question 5
 ```{r}
 rate_q5 = 2
-#Policy A (BAU)
+#Setting Policy warming scenarios that were given
+warming$policy_A_1 <- warming$CO2_base
+warming$policy_A_2 <- warming$CO2_base*1.5
+warming$policy_B <- warming$CO2_base
 
+#policy B temp stays at 1.29deg C
+for(i in 1:79){
+  if(warming$policy_B[i] > 1.29){
+    warming$policy_B[i] = 1.29
+  }
+}
 
-#Policy B (Strong Action)
-warming$policy_B <- discount_fun(rate_q5, (warming$year - 2022), warming$base_dam)
-adding = seq(warming$policy_B[1], warming$policy_B[28], 1)
-epv_to_2050 = mapply(sum, c(warming$policy_B[1]:warming$policy_B[28]))
-epv_post_2050 = warming$policy_B[30]*50 #50 year period
+#calculating damages
+warming$policy_A_1_dam <- quad_fun(warming$policy_A_1, (warming$policy_A_1)^2)
+warming$policy_A_2_dam <- quad_fun(warming$policy_A_2, (warming$policy_A_2)^2)
+warming$policy_B_dam <- quad_fun(warming$policy_B, (warming$policy_B)^2)
+
+#converting damages into NPV
+warming$policy_A_1_dam_npv <- discount_fun(2, warming$year - 2022, warming$policy_A_1_dam)
+warming$policy_A_2_dam_npv <- discount_fun(2, warming$year - 2022, warming$policy_A_2_dam)
+warming$policy_B_dam_npv <- discount_fun(2, warming$year - 2022, warming$policy_B_dam)
+
+#summing npv damages
+A_1_sum = sum(warming$policy_A_1_dam_npv)
+A_2_sum = sum(warming$policy_A_2_dam_npv)
+B_sum = sum(warming$policy_B_dam_npv)
+
+#given probabilities 
+A_1_prob = .5
+A_2_prob = .5
+A_sum = (A_1_sum * A_1_prob) + (A_2_sum * A_2_prob)
+
+#for in text code
+A_sum_trillion = A_sum/(1e12)
+B_sum_trillion = B_sum/(1e12)
 ```
 
+Expected present value of damages under Policy A: $`r round(A_sum_trillion,0)` trillion
+Expected present value of damages under Policy B: $`r round(B_sum_trillion,0)` trillion
+
+```{r}
+#plot of cost of policies versus cost of implementation 
+policy_plot <- data_frame(imp_cost = seq(0,3000e12, by = 1e12))
+policy_plot$pol_a <- A_sum*rep(1,length(policy_plot$imp_cost))
+policy_plot$pol_b <- B_sum*rep(1,length(policy_plot$imp_cost)) + policy_plot$imp_cost
+#policy_plot$b_cross<- B_sum*rep(1,length(policy_plot$imp_cost))
+
+#plotting policies
+ggplot(data = policy_plot) +
+geom_line(aes(x = imp_cost, y = pol_a), color = "red") +
+  geom_line(aes(x = imp_cost, y = pol_b), color = "blue") +
+  labs(x = "Policy Implementation Cost ($)", y = "Total Policy Cost ($)") +
+  theme_economist()
+
+pol_b_slope <- lm(pol_b ~ 0 + imp_cost, data = policy_plot)$coef[1]
+
+intersection_trill = (A_sum / pol_b_slope)/1e12
+```
+
+**Figure 6:** The red line represents the total cost of policy A that involves no implementation cost. The blue line represents the total cost of policy B at different implementation costs.
+
+The two lines intersect at an implementation cost of $`r round(intersection_trill,0)` trillion USD. This means that Congress should pursue Policy B and spend up to this amount on implementation before Policy A becomes the cheaper option 
+
+##Question 6
+A risk averse society would choose Policy B because their is less uncertainty surrounding the possible damages than in Policy A. There is a 50% chance that a 1.5˚C warming scenario could occur for option A, which would result in even greater damages than plotted above. Given that society is risk averse, my advice to Congress would still be in favor of Policy B, even after the $`r round(intersection_trill,0)` trillion dollar implementation value is surpassed. 
