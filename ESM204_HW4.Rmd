@@ -1,8 +1,10 @@
 ---
-title: "HW4"
+title: "ESM 204 HW 4: Calculating the SCC and policy choice under uncertainty"
 author: "Drew Andersen"
-date: "5/18/2022"
-output: html_document
+date: "5/27/2022"
+output: 
+  html_document:
+    code_folding: hide
 ---
 
 ```{r setup, include = FALSE, message = FALSE}
@@ -14,7 +16,6 @@ library(kableExtra)
 library(ggthemes)
 ```
 
-#Introduction
 ```{r}
 damages <- read_csv(here("damages.csv"))
 warming <- read_csv(here("warming.csv"))[,-1]
@@ -30,7 +31,8 @@ warming <- warming %>%
          CO2_pulse = warming_pulse)
 ```
 
-##Question 1
+## Question 1
+
 ```{r}
 #quad model with 0 intercept
 quad_model <- lm(dam ~ 0 + deg_c + deg_c_sq, data = damages)
@@ -44,7 +46,7 @@ quad_fun <- function(deg_c, deg_c_sq){
 damages$dam_fit = quad_fun(damages$deg_c, damages$deg_c_sq)
 ```
 
-```{r}
+```{r, fig.align="center"}
 ggplot(data = damages, aes(x = deg_c, y = dam)) +
   geom_point() +
   geom_smooth(method = "lm", formula = y ~ x + I(x^2)) +
@@ -52,10 +54,11 @@ ggplot(data = damages, aes(x = deg_c, y = dam)) +
   ylab("Annual Total Damages ($)") +
   theme_minimal()
 ```
- 
- **Figure 1:** The annual total damages from climate change warming in degree Celsius fitted with a quadratic function with a zero intercept. 
- 
-##Question 2
+
+**Figure 1:** The annual total damages from climate change warming in degree Celsius fitted with a quadratic function with a zero intercept.
+
+## Question 2
+
 ```{r}
 #using function to calculate env damage from baseline, pulse, difference, and pulse per ton of CO2
 warming$base_dam <- quad_fun(warming$CO2_base,(warming$CO2_base)^2)
@@ -64,7 +67,7 @@ warming$dam_diff <- warming$pulse_dam - warming$base_dam
 warming$pulse_dam_per_ton_CO2 <- warming$dam_diff/(35E9)
 ```
 
-```{r}
+```{r, fig.align="center"}
 ggplot(data = warming, aes(x = year, y = base_dam)) +
   geom_point() +
   xlab("Year") +
@@ -73,7 +76,7 @@ ggplot(data = warming, aes(x = year, y = base_dam)) +
 
 **Figure 2:** Damages over time without the pulse.
 
-```{r}
+```{r, fig.align="center"}
 ggplot(data = warming, aes(x = year, y = pulse_dam)) +
   geom_point() +
   xlab("Year") +
@@ -82,7 +85,7 @@ ggplot(data = warming, aes(x = year, y = pulse_dam)) +
 
 **Figure 3:** Damages over time with the pulse.
 
-```{r}
+```{r, fig.align="center"}
 ggplot(data = warming, aes(x = year, y = dam_diff)) +
   geom_point() +
   xlab("Year") +
@@ -91,7 +94,7 @@ ggplot(data = warming, aes(x = year, y = dam_diff)) +
 
 **Figure 4:** The difference in damages over time that arises from the pulse.
 
-```{r}
+```{r, fig.align="center"}
 ggplot(data = warming, aes(x = year, y = pulse_dam_per_ton_CO2)) +
   geom_point() +
   xlab("Year") +
@@ -100,8 +103,9 @@ ggplot(data = warming, aes(x = year, y = pulse_dam_per_ton_CO2)) +
 
 **Figure 5:** The difference in damages over time from the pulse per ton of CO2 (assuming that each ton of the pulse causes the same amount of damage).
 
-##Question 3 & 4
-```{r}
+## Question 3
+
+```{r, fig.align="center"}
 one_ton_dam = sum(warming$pulse_dam_per_ton_CO2)
 
 discount_fun <- function(rate, time, fv){
@@ -118,14 +122,21 @@ discount_ramsey = discount_fun(ramsey_rate, 78, one_ton_dam)
 
 ggplot(data = scc_df, aes(x = rate, y = scc)) +
   geom_point() +
+  xlab("Discount Rate") +
+  ylab("SCC ($)") +
   geom_point(aes(x = ramsey_rate, y = discount_ramsey), colour = "red")
 ```
 
 **Figure 6:** The social cost of carbon (SCC) at various discount rates. A higher discount rate leads to a lower SCC. The red dot represent the SCC using the Ramsey Rule (rate = `r ramsey_rate`%).
 
-The SCC is equal to `r scc_df[scc_df$rate == 3.0,]` dollars USD when using the Ramsey Rule to set the discount rate.
+Discount rate affects the SCC by assigning a present-day value to the cost of future damages that are a result of CO2 emissions. A lower discount rate increases the net present value of future damages which, in turn, increases the social cost of carbon. A higher discount rate leads to lower net present value for future damages which, in turn, would decrease the social cost of carbon. A low SCC most likely underestimates future damages and the discount rate is larger as a result. 
 
-##Question 5
+## Question 4
+
+The SCC is equal to \$`r round(scc_df$scc[scc_df$rate == 3],0)` when using the Ramsey Rule to set the discount rate.
+
+## Question 5
+
 ```{r}
 rate_q5 = 2
 #Setting Policy warming scenarios that were given
@@ -146,9 +157,9 @@ warming$policy_A_2_dam <- quad_fun(warming$policy_A_2, (warming$policy_A_2)^2)
 warming$policy_B_dam <- quad_fun(warming$policy_B, (warming$policy_B)^2)
 
 #converting damages into NPV
-warming$policy_A_1_dam_npv <- discount_fun(2, warming$year - 2022, warming$policy_A_1_dam)
-warming$policy_A_2_dam_npv <- discount_fun(2, warming$year - 2022, warming$policy_A_2_dam)
-warming$policy_B_dam_npv <- discount_fun(2, warming$year - 2022, warming$policy_B_dam)
+warming$policy_A_1_dam_npv <- discount_fun(rate_q5, warming$year - 2022, warming$policy_A_1_dam)
+warming$policy_A_2_dam_npv <- discount_fun(rate_q5, warming$year - 2022, warming$policy_A_2_dam)
+warming$policy_B_dam_npv <- discount_fun(rate_q5, warming$year - 2022, warming$policy_B_dam)
 
 #summing npv damages
 A_1_sum = sum(warming$policy_A_1_dam_npv)
@@ -165,20 +176,19 @@ A_sum_trillion = A_sum/(1e12)
 B_sum_trillion = B_sum/(1e12)
 ```
 
-Expected present value of damages under Policy A: $`r round(A_sum_trillion,0)` trillion
-Expected present value of damages under Policy B: $`r round(B_sum_trillion,0)` trillion
+**Expected present value of damages under Policy A:** $`r round(A_sum_trillion,0)` trillion  
+**Expected present value of damages under Policy B:** $`r round(B_sum_trillion,0)` trillion
 
-```{r}
+```{r, fig.align="center"}
 #plot of cost of policies versus cost of implementation 
 policy_plot <- data_frame(imp_cost = seq(0,3000e12, by = 1e12))
 policy_plot$pol_a <- A_sum*rep(1,length(policy_plot$imp_cost))
 policy_plot$pol_b <- B_sum*rep(1,length(policy_plot$imp_cost)) + policy_plot$imp_cost
-#policy_plot$b_cross<- B_sum*rep(1,length(policy_plot$imp_cost))
 
 #plotting policies
 ggplot(data = policy_plot) +
 geom_line(aes(x = imp_cost, y = pol_a), color = "red") +
-  geom_line(aes(x = imp_cost, y = pol_b), color = "blue") +
+  geom_line(aes(x = imp_cost, y = pol_b), color = "green") +
   labs(x = "Policy Implementation Cost ($)", y = "Total Policy Cost ($)") +
   theme_economist()
 
@@ -187,9 +197,10 @@ pol_b_slope <- lm(pol_b ~ 0 + imp_cost, data = policy_plot)$coef[1]
 intersection_trill = (A_sum / pol_b_slope)/1e12
 ```
 
-**Figure 6:** The red line represents the total cost of policy A that involves no implementation cost. The blue line represents the total cost of policy B at different implementation costs.
+**Figure 7:** The red line represents the total cost of policy A that involves no implementation cost. The green line represents the total cost of policy B at different implementation costs.
 
-The two lines intersect at an implementation cost of $`r round(intersection_trill,0)` trillion USD. This means that Congress should pursue Policy B and spend up to this amount on implementation before Policy A becomes the cheaper option 
+The two lines intersect at an implementation cost of \$`r round(intersection_trill,0)` trillion. This means that Congress should pursue Policy B and spend up to this amount on implementation before Policy A becomes the cheaper option. This is assuming society is risk neutral. 
 
-##Question 6
-A risk averse society would choose Policy B because their is less uncertainty surrounding the possible damages than in Policy A. There is a 50% chance that a 1.5˚C warming scenario could occur for option A, which would result in even greater damages than plotted above. Given that society is risk averse, my advice to Congress would still be in favor of Policy B, even after the $`r round(intersection_trill,0)` trillion dollar implementation value is surpassed. 
+## Question 6
+
+A risk averse society would choose Policy B because their is less uncertainty surrounding the possible damages than in Policy A. There is a 50% chance that a 1.5˚C warming scenario could occur for option A, which would result in even greater damages than plotted above. Given that society is risk averse, my advice to Congress would still be in favor of Policy B, even after the \$`r round(intersection_trill,0)` trillion implementation value is surpassed.
